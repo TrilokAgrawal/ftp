@@ -7,7 +7,8 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
-	"errors"
+
+	//"errors"
 	"io"
 	"net"
 	"net/textproto"
@@ -15,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hashicorp/go-multierror"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -671,7 +672,7 @@ func (c *ServerConn) NameList(path string) (entries []string, err error) {
 		return nil, err
 	}
 
-	var errs *multierror.Error
+	var errs error
 
 	r := &Response{conn: conn, c: c}
 
@@ -681,13 +682,13 @@ func (c *ServerConn) NameList(path string) (entries []string, err error) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		errs = multierror.Append(errs, err)
+		errs = errors.Wrap(errs, err.Error())
 	}
 	if err := r.Close(); err != nil {
-		errs = multierror.Append(errs, err)
+		errs = errors.Wrap(errs, err.Error())
 	}
 
-	return entries, errs.ErrorOrNil()
+	return entries, errs
 }
 
 // List issues a LIST FTP command.
@@ -715,7 +716,7 @@ func (c *ServerConn) List(path string) (entries []*Entry, err error) {
 		return nil, err
 	}
 
-	var errs *multierror.Error
+	var errs error
 
 	r := &Response{conn: conn, c: c}
 
@@ -729,13 +730,13 @@ func (c *ServerConn) List(path string) (entries []*Entry, err error) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		errs = multierror.Append(errs, err)
+		errs = errors.Wrap(errs, err.Error())
 	}
 	if err := r.Close(); err != nil {
-		errs = multierror.Append(errs, err)
+		errs = errors.Wrap(errs, err.Error())
 	}
 
-	return entries, errs.ErrorOrNil()
+	return entries, errs
 }
 
 // GetEntry issues a MLST FTP command which retrieves one single Entry using the
@@ -944,14 +945,14 @@ func (c *ServerConn) StorFrom(path string, r io.Reader, offset uint64) error {
 		return err
 	}
 
-	var errs *multierror.Error
+	var errs error
 
 	// if the upload fails we still need to try to read the server
 	// response otherwise if the failure is not due to a connection problem,
 	// for example the server denied the upload for quota limits, we miss
 	// the response and we cannot use the connection to send other commands.
 	if n, err := io.Copy(conn, r); err != nil {
-		errs = multierror.Append(errs, err)
+		errs = errors.Wrap(errs, err.Error())
 	} else if n == 0 {
 		// If we wrote no bytes and got no error, make sure we call
 		// tls.Handshake on the connection as it won't get called
@@ -962,20 +963,20 @@ func (c *ServerConn) StorFrom(path string, r io.Reader, offset uint64) error {
 		// an empty file without this.
 		if do, ok := conn.(interface{ Handshake() error }); ok {
 			if err := do.Handshake(); err != nil {
-				errs = multierror.Append(errs, err)
+				errs = errors.Wrap(errs, err.Error())
 			}
 		}
 	}
 
 	if err := conn.Close(); err != nil {
-		errs = multierror.Append(errs, err)
+		errs = errors.Wrap(errs, err.Error())
 	}
 
 	if err := c.checkDataShut(); err != nil {
-		errs = multierror.Append(errs, err)
+		errs = errors.Wrap(errs, err.Error())
 	}
 
-	return errs.ErrorOrNil()
+	return errs
 }
 
 // Append issues a APPE FTP command to store a file to the remote FTP server.
@@ -989,21 +990,21 @@ func (c *ServerConn) Append(path string, r io.Reader) error {
 		return err
 	}
 
-	var errs *multierror.Error
+	var errs error
 
 	if _, err := io.Copy(conn, r); err != nil {
-		errs = multierror.Append(errs, err)
+		errs = errors.Wrap(errs, err.Error())
 	}
 
 	if err := conn.Close(); err != nil {
-		errs = multierror.Append(errs, err)
+		errs = errors.Wrap(errs, err.Error())
 	}
 
 	if err := c.checkDataShut(); err != nil {
-		errs = multierror.Append(errs, err)
+		errs = errors.Wrap(errs, err.Error())
 	}
 
-	return errs.ErrorOrNil()
+	return errs
 }
 
 // Rename renames a file on the remote FTP server.
@@ -1110,17 +1111,17 @@ func (c *ServerConn) Logout() error {
 // Quit issues a QUIT FTP command to properly close the connection from the
 // remote FTP server.
 func (c *ServerConn) Quit() error {
-	var errs *multierror.Error
+	var errs error
 
 	if _, err := c.conn.Cmd("QUIT"); err != nil {
-		errs = multierror.Append(errs, err)
+		errs = errors.Wrap(errs, err.Error())
 	}
 
 	if err := c.conn.Close(); err != nil {
-		errs = multierror.Append(errs, err)
+		errs = errors.Wrap(errs, err.Error())
 	}
 
-	return errs.ErrorOrNil()
+	return errs
 }
 
 // Read implements the io.Reader interface on a FTP data connection.
@@ -1135,18 +1136,18 @@ func (r *Response) Close() error {
 		return nil
 	}
 
-	var errs *multierror.Error
+	var errs error
 
 	if err := r.conn.Close(); err != nil {
-		errs = multierror.Append(errs, err)
+		errs = errors.Wrap(errs, err.Error())
 	}
 
 	if err := r.c.checkDataShut(); err != nil {
-		errs = multierror.Append(errs, err)
+		errs = errors.Wrap(errs, err.Error())
 	}
 
 	r.closed = true
-	return errs.ErrorOrNil()
+	return errs
 }
 
 // SetDeadline sets the deadlines associated with the connection.
